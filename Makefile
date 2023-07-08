@@ -6,7 +6,7 @@ CFLAGS=-g
 
 
 example_progam: example_program.o
-	$(CC) -o $@ example_program.o
+	$(CC) -o $@ example_program.o $(CFLAGS)
 
 
 all: example_program
