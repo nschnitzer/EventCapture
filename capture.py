@@ -1,3 +1,5 @@
+import json
+
 class TestCommand(GenericCommand):
     """ New Test Command"""
     _cmdline_ = "testcmd"
@@ -75,12 +77,59 @@ class StepInstruction(GenericCommand):
     def do_invoke(self, argv):
         gdb.execute("si")
 
+class TestExportToFile(GenericCommand):
+    """ Command to try and write to a file """
+    _cmdline_ = "test_export_file"
+    _syntax_  = "{_cmdline_}"
+
+    @only_if_gdb_running
+    def do_invoke(self, argv):
+      frame = gdb.selected_frame()
+      with open("export.txt", 'w') as file:
+        registers = X86_64.all_registers
+        for reg in registers:
+            reg_data = frame.read_register(reg[1:])
+            file.write(f"{reg} -> {reg_data}\n")
+
+      print("Exported...")
+
+class TestExportJson(GenericCommand):
+    """ Command to try and use the imported json package to export data"""
+    _cmdline_ = "export_json"
+    _syntax_  = "{_cmdline_}"
+
+    @only_if_gdb_running
+    def do_invoke(self, argv):
+        frame = gdb.selected_frame()
+        register_dict  = {}
+
+        registers = X86_64.all_registers
+        for reg in registers:
+            reg_data = frame.read_register(reg[1:])
+            # tmp_dct = {reg:reg_data}
+            # register_dict.update(tmp_dict)
+            register_dict[reg] = str(reg_data)
+        
+        with open("register_dump.json", 'w') as f:
+            json.dump(register_dict, f, indent=4)
+
+class SetupProgram(GenericCommand):
+    """ Command to do get the program ready for testing """
+    _cmdline_ = "setup"
+    _syntax_  = "{_cmdline_}"
+
+    def do_invoke(self, argv):
+        gdb.execute("b main")
+        gdb.execute("r")
+
 register_external_command(TestCommand())
 register_external_command(Print_X86_64_Registers())
 register_external_command(Get_Current_Instruction())
 register_external_command(StartProgram())
 register_external_command(StepInstruction())
-
+register_external_command(TestExportToFile())
+register_external_command(SetupProgram())
+register_external_command(TestExportJson())
 
 
 
