@@ -92,6 +92,8 @@ class TestExportToFile(GenericCommand):
             file.write(f"{reg} -> {reg_data}\n")
 
       print("Exported...")
+      
+      return
 
 class TestExportJson(GenericCommand):
     """ Command to try and use the imported json package to export data"""
@@ -112,6 +114,8 @@ class TestExportJson(GenericCommand):
         
         with open("register_dump.json", 'w') as f:
             json.dump(register_dict, f, indent=4)
+        
+        return 
 
 class SetupProgram(GenericCommand):
     """ Command to do get the program ready for testing """
@@ -121,6 +125,87 @@ class SetupProgram(GenericCommand):
     def do_invoke(self, argv):
         gdb.execute("b main")
         gdb.execute("r")
+        
+        return
+
+class FindStackTrace(GenericCommand):
+    """ Command to try and extract the current stack trace. Will eventually
+     be exported via json"""
+    _cmdline_ = "findstacktrace"
+    _syntax_  = "{_cmdline_}"
+
+    @only_if_gdb_running
+    def do_invoke(self, argv):
+        # Get all of the stack frames
+        orig_frame    = gdb.selected_frame()
+        current_frame = gdb.newest_frame()
+
+        while current_frame:
+            current_frame.select()
+            if not current_frame.is_valid():
+                continue
+
+            pc = current_frame.pc()
+            name = current_frame.name()
+            frame_args = []
+            if name:
+                frame_args = gdb.FrameDecorator.FrameDecorator(current_frame).frame_args() or []
+
+            print(f"Level: {level}")
+            print(f"PC: {pc:#x}")
+            for i in frame_args:
+                print(f"frame arg: {i.sym}={i.sym.value(current_frame)}")
+
+            print()
+            current_frame = current_frame.older()
+        orig_frame.select()
+        return
+        
+class ExportStackTraceJSON(GenericCommand):
+    """ Export stack trace data in JSON Format
+        Each entry has format:
+            {PC, Name, {Frame Var, Frame Var Value}}
+    """
+    _cmdline_ = "export_stacktrace"
+    _syntax_  = "{_cmdline_}"
+
+    @only_if_gdb_running
+    def do_invoke(self, argv):
+        orig_frame = gdb.selected_frame()
+        current_frame = gdb.newest_frame()
+        vals = {}
+
+        while current_frame:
+            current_frame.select()
+            if not current_frame.is_valid():
+                continue
+
+            values = {}
+            pc = current_frame.pc()
+            values["pc"] = pc
+            name = current_frame.name()
+            values["name"] = name
+            values["frame_args"] = {}
+            frame_args = []
+            if name:
+                frame_args = gdb.FrameDecorator.FrameDecorator(current_frame).frame_args() or []
+
+            for i in frame_args:
+                values["frame_args"][str(i.sym)] = str(i.sym.value(current_frame))
+
+            level = current_frame.level()
+            vals[level] = values
+
+            current_frame = current_frame.older()
+
+        orig_frame.select()
+        # Dump to json file
+        with open("stacktrace_dump.json", 'w') as f:
+            json.dump(vals, f, indent=4)
+
+
+
+
 
 register_external_command(TestCommand())
 register_external_command(Print_X86_64_Registers())
@@ -130,6 +215,8 @@ register_external_command(StepInstruction())
 register_external_command(TestExportToFile())
 register_external_command(SetupProgram())
 register_external_command(TestExportJson())
+register_external_command(FindStackTrace())
+register_external_command(ExportStackTraceJSON())
 
 
 
